@@ -16,7 +16,7 @@ use actix_service::{
     map_config, IntoService, IntoServiceFactory, Service, ServiceFactory,
 };
 use awc::error::PayloadError;
-use awc::{Client, ClientRequest, ClientResponse, Connector};
+use awc::{Client, ClientRequest, ClientResponse, Connector, ws::WebsocketsRequest};
 use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
 use futures_util::future::ok;
@@ -998,15 +998,28 @@ impl TestServer {
         response.body().limit(10_485_760).await
     }
 
+    /// Connect to websocket server at given path and configure WebsocketsRequest using provided function
+    pub async fn ws_at_with_config<ConfFunc>(
+        &mut self,
+        path: &str,
+        config_func: ConfFunc
+    ) -> Result<Framed<impl AsyncRead + AsyncWrite, ws::Codec>, awc::error::WsClientError>
+    where
+        ConfFunc: FnOnce(WebsocketsRequest) -> WebsocketsRequest
+    {
+        let url = self.url(path);
+        let request = self.client.ws(url);
+        let connect = config_func(request).connect();
+        connect.await.map(|(_, framed)| framed)
+    }
+
     /// Connect to websocket server at a given path
     pub async fn ws_at(
         &mut self,
         path: &str,
     ) -> Result<Framed<impl AsyncRead + AsyncWrite, ws::Codec>, awc::error::WsClientError>
     {
-        let url = self.url(path);
-        let connect = self.client.ws(url).connect();
-        connect.await.map(|(_, framed)| framed)
+        self.ws_at_with_config(path, |wsr| wsr).await
     }
 
     /// Connect to a websocket server

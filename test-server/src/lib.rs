@@ -241,15 +241,27 @@ impl TestServer {
         response.body().limit(10_485_760).await
     }
 
-    /// Connect to websocket server at a given path
+    /// Connect to websocket server at given path and configure WebsocketsRequest using provided function
+    pub async fn ws_at_with_config<ConfFunc>(
+        &mut self,
+        path: &str,
+        config_func: ConfFunc
+    ) -> Result<Framed<impl AsyncRead + AsyncWrite, ws::Codec>, awc::error::WsClientError>
+    where
+        ConfFunc: FnOnce(ws::WebsocketsRequest) -> ws::WebsocketsRequest
+    {
+        let url = self.url(path);
+        let request = self.client.ws(url);
+        let connect = config_func(request).connect();
+        connect.await.map(|(_, framed)| framed)
+    }
+
+    /// Connect to WebSocket server at a given path
     pub async fn ws_at(
         &mut self,
         path: &str,
-    ) -> Result<Framed<impl AsyncRead + AsyncWrite, ws::Codec>, awc::error::WsClientError>
-    {
-        let url = self.url(path);
-        let connect = self.client.ws(url).connect();
-        connect.await.map(|(_, framed)| framed)
+    ) -> Result<Framed<impl AsyncRead + AsyncWrite, ws::Codec>, awc::error::WsClientError> {
+        self.ws_at_with_config(path, |wsr| wsr).await
     }
 
     /// Connect to a websocket server
